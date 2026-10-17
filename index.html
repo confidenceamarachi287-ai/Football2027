@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11v11 Tactical Football Game</title>
+    <style>
+        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; text-align: center; }
+        #game-container { position: relative; display: inline-block; margin-top: 20px; }
+        canvas { border: 4px solid #fff; background: #2e8b57; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .ui { margin: 10px; font-size: 18px; }
+        select, button { padding: 8px; font-size: 16px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="ui">
+        <h2>🏆 11v11 Web Football Match</h2>
+        <label>Home Team:</label>
+        <select id="homeTeam">
+            <option value="Real Madrid">Real Madrid (White)</option>
+            <option value="Portugal">Portugal (Red)</option>
+            <option value="Barcelona">Barcelona (Blue)</option>
+        </select>
+        <button onclick="startGame()">Kick Off Match</button>
+        <div><strong>Score:</strong> <span id="score">0 - 0</span></div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="pitch" width="800" height="500"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('pitch');
+        const ctx = canvas.getContext('2d');
+
+        // Game Configuration
+        let ball = { x: 400, y: 250, vx: 0, vy: 0, radius: 8 };
+        let teamA = [], teamB = [];
+        let scoreA = 0, scoreB = 0;
+        let gameRunning = false;
+
+        // Tactical 11-player Formations (Positions mapped on a 800x500 grid)
+        const formationA = [
+            {x: 50, y: 250, role: 'GK'}, // Goalkeeper
+            {x: 150, y: 100}, {x: 150, y: 200}, {x: 150, y: 300}, {x: 150, y: 400}, // Defenders
+            {x: 280, y: 120}, {x: 250, y: 250}, {x: 280, y: 380}, // Midfielders
+            {x: 380, y: 100}, {x: 390, y: 250}, {x: 380, y: 400}  // Attackers (Messi/Ronaldo spots)
+        ];
+
+        const formationB = [
+            {x: 750, y: 250, role: 'GK'}, // Goalkeeper
+            {x: 650, y: 100}, {x: 650, y: 200}, {x: 650, y: 300}, {x: 650, y: 400}, // Defenders
+            {x: 520, y: 120}, {x: 550, y: 250}, {x: 520, y: 380}, // Midfielders
+            {x: 420, y: 100}, {x: 410, y: 250}, {x: 420, y: 400}  // Attackers
+        ];
+
+        function createTeams() {
+            teamA = formationA.map(pos => ({ ...pos, startX: pos.x, startY: pos.y, color: '#FFFFFF', speed: 1.8 }));
+            teamB = formationB.map(pos => ({ ...pos, startX: pos.x, startY: pos.y, color: '#FF0000', speed: 1.7 }));
+            
+            // Apply team kit modifications dynamically
+            const selection = document.getElementById('homeTeam').value;
+            if (selection === "Portugal") teamA.forEach(p => p.color = '#006633');
+            if (selection === "Barcelona") teamA.forEach(p => p.color = '#0000FF');
+        }
+
+        function startGame() {
+            createTeams();
+            ball.x = 400; ball.y = 250; ball.vx = (Math.random() - 0.5) * 6; ball.vy = (Math.random() - 0.5) * 6;
+            gameRunning = true;
+        }
+
+        // Basic AI Logic: Find nearest player to ball and move them toward it
+        function updateAI(team, isTeamA) {
+            team.forEach(player => {
+                let dx = ball.x - player.x;
+                let dy = ball.y - player.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                // If player is close, they track/chase the ball
+                if (distance < 180) {
+                    player.x += (dx / distance) * player.speed;
+                    player.y += (dy / distance) * player.speed;
+
+                    // Kick mechanics if player touches ball
+                    if (distance < 15) {
+                        ball.vx = isTeamA ? (4 + Math.random() * 4) : (-4 - Math.random() * 4);
+                        ball.vy = (Math.random() - 0.5) * 6;
+                    }
+                } else {
+                    // Return to tactical zone position
+                    player.x += (player.startX - player.x) * 0.02;
+                    player.y += (player.startY - player.y) * 0.02;
+                }
+            });
+        }
+
+        function updatePhysics() {
+            if (!gameRunning) return;
+
+            // Move ball
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            ball.vx *= 0.98; // Pitch friction
+            ball.vy *= 0.98;
+
+            // Pitch Wall Collisions
+            if (ball.y <= 10 || ball.y >= canvas.height - 10) ball.vy *= -1;
+
+            // Goal Scoring System
+            if (ball.x <= 0) {
+                if (ball.y > 200 && ball.y < 300) { scoreB++; resetAfterGoal(); } 
+                else { ball.vx *= -1; }
+            }
+            if (ball.x >= canvas.width) {
+                if (ball.y > 200 && ball.y < 300) { scoreA++; resetAfterGoal(); } 
+                else { ball.vx *= -1; }
+            }
+
+            document.getElementById('score').innerText = `${scoreA} - ${scoreB}`;
+        }
+
+        function resetAfterGoal() {
+            ball.x = 400; ball.y = 250;
+            ball.vx = (Math.random() - 0.5) * 5; ball.vy = (Math.random() - 0.5) * 5;
+            createTeams();
+        }
+
+        function drawPitchLines() {
+            ctx.fillStyle = '#2e8b57';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 3;
+
+            // Center Line and Center Circle
+            ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 500); ctx.stroke();
+            ctx.beginPath(); ctx.arc(400, 250, 60, 0, Math.PI * 2); ctx.stroke();
+
+            // Penalty Boxes
+            ctx.strokeRect(0, 125, 100, 250);
+            ctx.strokeRect(700, 125, 100, 250);
+        }
+
+        function drawEntities() {
+            // Draw Players
+            [...teamA, ...teamB].forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = p.color; ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke();
+            });
+
+            // Draw Ball
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+        }
+
+        function mainLoop() {
+            drawPitchLines();
+            if (gameRunning) {
+                updateAI(teamA, true);
+                updateAI(teamB, false);
+                updatePhysics();
+            }
+            drawEntities();
+            requestAnimationFrame(mainLoop);
+        }
+
+        // Run Engine Loop
+        mainLoop();
+    </script>
+</body>
+</html>
